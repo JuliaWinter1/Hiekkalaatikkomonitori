@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hiekkalaatikkomonitori</title>
+
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .kortti {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin: 20px auto;
+            max-width: 800px;
+        }
+
+        .arvot {
+            display: flex;
+            justify-content: space-around;
+            font-size: 1.2em;
+            margin-top: 20px;
+        }
+
+        .laatikko {
+            padding: 15px;
+            background-color: #e3f2fd;
+            border-radius: 8px;
+            width: 40%;
+        }
+
+        #kaavio {
+            width: 100%;
+            height: 400px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="kortti">
+        <h1>🐾 Laatikkovahti</h1>
+        <p></p>
+
+        <div class="arvot">
+            <div class="laatikko">
+                <strong>Laatikko 1 käyty viimeksi:</strong><br>
+                <span id="laatikko1-aika">Haetaan...</span>
+            </div>
+            <div class="laatikko">
+                <strong>Laatikko 2 käyty viimeksi:</strong><br>
+                <span id="laatikko2-aika">Haetaan...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="kortti">
+        <h2>Mittaushistoria (Viimeiset 24 tuntia)</h2>
+        <div id="kaavio"></div>
+    </div>
+
+    <script>
+        const CHANNEL_ID = '3556625';
+        const READ_API_KEY = 'HPRR5PIT3EGVPNAJ';
+
+        google.charts.load('current', { 'packages': ['corechart'] });
+        google.charts.setOnLoadCallback(haeDataThingSpeakista);
+
+        function haeDataThingSpeakista() {
+            const url = `https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?api_key=${READ_API_KEY}&minutes=1440`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    kasitteleData(data.feeds);
+                })
+                .catch(error => {
+                    console.error('Virhe datan haussa:', error);
+                    document.getElementById('laatikko1-aika').innerText = "Virhe yhteydessä";
+                });
+        }
+
+        function kasitteleData(feeds) {
+            let vikaLaatikko1 = "Ei dataa";
+            let vikaLaatikko2 = "Ei dataa";
+
+            let dataTable = new google.visualization.DataTable();
+            dataTable.addColumn('datetime', 'Aika');
+            dataTable.addColumn('number', 'Laatikko 1');
+            dataTable.addColumn('number', 'Laatikko 2');
+
+            feeds.forEach(feed => {
+                let tapahtumaAika = new Date(feed.created_at);
+                let muotoiltuAika = tapahtumaAika.toLocaleDateString('fi-FI') + ' klo ' + tapahtumaAika.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
+
+                let arvo1 = feed.field1 ? parseInt(feed.field1) : null;
+                let arvo2 = feed.field2 ? parseInt(feed.field2) : null;
+
+                if (arvo1 === 1) vikaLaatikko1 = muotoiltuAika;
+                if (arvo2 === 1) vikaLaatikko2 = muotoiltuAika;
+
+                let piirtoArvo1 = (arvo1 === 1) ? 2 : null;
+                let piirtoArvo2 = (arvo2 === 1) ? 1 : null;
+
+                if (piirtoArvo1 !== null || piirtoArvo2 !== null) {
+                    dataTable.addRow([tapahtumaAika, piirtoArvo1, piirtoArvo2]);
+                }
+            });
+
+            document.getElementById('laatikko1-aika').innerText = vikaLaatikko1;
+            document.getElementById('laatikko2-aika').innerText = vikaLaatikko2;
+
+            let nyt = new Date();
+            let eilen = new Date(nyt.getTime() - (24 * 60 * 60 * 1000));
+
+            let options = {
+                title: 'Tapahtumat aikajanalla',
+                legend: 'none',
+                hAxis: {
+                    title: 'Kellonaika',
+                    format: 'HH:mm',
+                    viewWindow: {
+                        min: eilen,
+                        max: nyt
+                    }
+                },
+                vAxis: {
+                    ticks: [
+                        { v: 1, f: 'Laatikko 2' },
+                        { v: 2, f: 'Laatikko 1' }
+                    ],
+                    viewWindow: { min: 0.5, max: 2.5 }
+                },
+                pointSize: 14,
+                colors: ['#2196F3', '#FF9800']
+            };
+
+            let chart = new google.visualization.ScatterChart(document.getElementById('kaavio'));
+            chart.draw(dataTable, options);
+        }
+    </script>
+</body>
+
+</html>
